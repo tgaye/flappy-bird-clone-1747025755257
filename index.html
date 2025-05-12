@@ -1,0 +1,354 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird Clone</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #instructions {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #333;
+        }
+    </style>
+
+<base target="_self">
+
+
+    </head><body><div id="game-container">
+        <div id="sketch-holder"></div>
+        <div id="instructions">Click or press SPACE to flap!</div>
+    </div>
+
+    <script>
+        let bird;
+        let pipes = [];
+        let gravity;
+        let lift;
+        let score;
+        let gameOver;
+        let gameStarted;
+        let pipeSpeed;
+        let pipeGap;
+        let birdColor;
+        let bgColor;
+        let groundHeight;
+        let lastPipeTime;
+        let pipeFrequency;
+        let highScore = 0;
+        let audioContext;
+        let flapSound;
+        let scoreSound;
+        let hitSound;
+
+        function setup() {
+            let canvas = createCanvas(400, 600);
+            canvas.parent('sketch-holder');
+            
+            initGame();
+            initAudio();
+        }
+
+        function initGame() {
+            bird = {
+                x: 100,
+                y: height / 2,
+                r: 20,
+                velocity: 0
+            };
+            
+            pipes = [];
+            gravity = 0.6;
+            lift = -12;
+            score = 0;
+            gameOver = false;
+            gameStarted = false;
+            pipeSpeed = 3;
+            pipeGap = 150;
+            birdColor = color(255, 204, 0);
+            bgColor = color(135, 206, 235);
+            groundHeight = 50;
+            lastPipeTime = 0;
+            pipeFrequency = 1500;
+            
+            if (localStorage.getItem('highScore')) {
+                highScore = parseInt(localStorage.getItem('highScore'));
+            }
+        }
+
+        function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Flap sound
+                flapSound = function() {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    osc.type = 'sine';
+                    osc.frequency.value = 600;
+                    gain.gain.value = 0.2;
+                    osc.start();
+                    osc.stop(audioContext.currentTime + 0.1);
+                };
+                
+                // Score sound
+                scoreSound = function() {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    osc.type = 'triangle';
+                    osc.frequency.value = 800;
+                    gain.gain.value = 0.2;
+                    osc.start();
+                    osc.stop(audioContext.currentTime + 0.2);
+                };
+                
+                // Hit sound
+                hitSound = function() {
+                    const osc = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioContext.destination);
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = 200;
+                    gain.gain.value = 0.3;
+                    osc.start();
+                    osc.stop(audioContext.currentTime + 0.3);
+                };
+            } catch (e) {
+                console.log("Audio not supported");
+            }
+        }
+
+        function draw() {
+            if (!gameStarted) {
+                drawStartScreen();
+                return;
+            }
+            
+            if (gameOver) {
+                drawGameOver();
+                return;
+            }
+            
+            // Background
+            background(bgColor);
+            
+            // Update and draw pipes
+            updatePipes();
+            drawPipes();
+            
+            // Update and draw bird
+            updateBird();
+            drawBird();
+            
+            // Draw ground
+            fill(139, 69, 19);
+            rect(0, height - groundHeight, width, groundHeight);
+            
+            // Draw score
+            fill(255);
+            textSize(32);
+            textAlign(CENTER);
+            text(score, width / 2, 50);
+        }
+
+        function drawStartScreen() {
+            background(bgColor);
+            fill(255);
+            textSize(32);
+            textAlign(CENTER);
+            text("Flappy Bird", width / 2, height / 3);
+            
+            textSize(16);
+            text("High Score: " + highScore, width / 2, height / 2);
+            
+            fill(255);
+            textSize(18);
+            text("Click or press SPACE to start", width / 2, height / 2 + 50);
+        }
+
+        function drawGameOver() {
+            background(bgColor);
+            fill(255);
+            textSize(32);
+            textAlign(CENTER);
+            text("Game Over", width / 2, height / 3);
+            
+            textSize(24);
+            text("Score: " + score, width / 2, height / 2);
+            
+            textSize(16);
+            text("High Score: " + highScore, width / 2, height / 2 + 40);
+            
+            fill(255);
+            textSize(18);
+            text("Click or press SPACE to restart", width / 2, height / 2 + 100);
+        }
+
+        function updateBird() {
+            bird.velocity += gravity;
+            bird.y += bird.velocity;
+            
+            // Check if bird hits ground or ceiling
+            if (bird.y > height - groundHeight - bird.r || bird.y < bird.r) {
+                gameOver = true;
+                if (hitSound) hitSound();
+            }
+        }
+
+        function drawBird() {
+            fill(birdColor);
+            ellipse(bird.x, bird.y, bird.r * 2);
+            
+            // Eye
+            fill(0);
+            ellipse(bird.x + 5, bird.y - 5, 5);
+            
+            // Beak
+            fill(255, 165, 0);
+            triangle(
+                bird.x + bird.r, bird.y,
+                bird.x + bird.r + 15, bird.y - 5,
+                bird.x + bird.r + 15, bird.y + 5
+            );
+        }
+
+        function updatePipes() {
+            // Add new pipes
+            if (millis() - lastPipeTime > pipeFrequency) {
+                addPipe();
+                lastPipeTime = millis();
+            }
+            
+            // Move pipes and check for collisions
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                pipes[i].x -= pipeSpeed;
+                
+                // Check if bird passed pipe
+                if (!pipes[i].passed && pipes[i].x + pipes[i].w < bird.x) {
+                    pipes[i].passed = true;
+                    score++;
+                    if (scoreSound) scoreSound();
+                    
+                    // Increase difficulty
+                    if (score % 5 === 0) {
+                        pipeSpeed += 0.5;
+                        pipeFrequency = max(800, pipeFrequency - 100);
+                    }
+                }
+                
+                // Check for collision
+                if (collision(bird, pipes[i])) {
+                    gameOver = true;
+                    if (hitSound) hitSound();
+                }
+                
+                // Remove off-screen pipes
+                if (pipes[i].x < -pipes[i].w) {
+                    pipes.splice(i, 1);
+                }
+            }
+        }
+
+        function drawPipes() {
+            for (let pipe of pipes) {
+                fill(50, 205, 50);
+                rect(pipe.x, 0, pipe.w, pipe.top);
+                rect(pipe.x, height - pipe.bottom - groundHeight, pipe.w, pipe.bottom);
+            }
+        }
+
+        function addPipe() {
+            let topHeight = random(50, height - pipeGap - 50 - groundHeight);
+            let bottomHeight = height - pipeGap - topHeight - groundHeight;
+            
+            pipes.push({
+                x: width,
+                w: 60,
+                top: topHeight,
+                bottom: bottomHeight,
+                passed: false
+            });
+        }
+
+        function collision(bird, pipe) {
+            // Check collision with top pipe
+            if (bird.x + bird.r > pipe.x && bird.x - bird.r < pipe.x + pipe.w &&
+                bird.y - bird.r < pipe.top) {
+                return true;
+            }
+            
+            // Check collision with bottom pipe
+            if (bird.x + bird.r > pipe.x && bird.x - bird.r < pipe.x + pipe.w &&
+                bird.y + bird.r > height - pipe.bottom - groundHeight) {
+                return true;
+            }
+            
+            return false;
+        }
+
+        function flap() {
+            if (!gameStarted) {
+                gameStarted = true;
+                return;
+            }
+            
+            if (gameOver) {
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('highScore', highScore);
+                }
+                initGame();
+                gameStarted = true;
+                return;
+            }
+            
+            bird.velocity = lift;
+            if (flapSound) flapSound();
+        }
+
+        function mousePressed() {
+            flap();
+        }
+
+        function keyPressed() {
+            if (key === ' ') {
+                flap();
+            }
+        }
+    </script>
+
+              
+          
+                
+          
+              
+</body></html>
